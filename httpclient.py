@@ -33,7 +33,9 @@ class HTTPResponse(object):
         self.body = body
 
 class HTTPClient(object):
-    #def get_host_port(self,url):
+    
+    def get_host_port(self,url):
+        pass
 
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -43,11 +45,17 @@ class HTTPClient(object):
     def get_code(self, data):
         return None
 
-    def get_headers(self,data):
+    def get_headers(self, data):
         return None
 
     def get_body(self, data):
         return None
+    
+    def create_post(self, url):
+        pass
+    
+    def create_get(self, url):
+        pass
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -70,11 +78,31 @@ class HTTPClient(object):
     def GET(self, url, args=None):
         code = 500
         body = ""
+        port = self.get_host_port(url)
+        message = self.create_get(url)
+        self.connect(url, port)
+        self.sendall(message)
+        data = self.recvall(self.socket)
+        code = self.get_code(data)
+        headers = self.get_headers(data)
+        body = self.get_body(data)
+        self.close()
+        print(body)
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
         code = 500
         body = ""
+        port = self.get_host_port(url)
+        message = self.create_post(url)
+        self.connect(url, port)
+        self.sendall(message)
+        data = self.recvall(self.socket)
+        code = self.get_code(data)
+        headers = self.get_headers(data)
+        body = self.get_body(data)
+        self.close()
+        print(body)
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
