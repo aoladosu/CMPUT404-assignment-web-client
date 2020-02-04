@@ -35,9 +35,23 @@ class HTTPResponse(object):
 class HTTPClient(object):
     
     def __init__(self):
-        self.get_headers = [""]
+        self.headers = [""]
     
     def get_host_port(self,url):
+        # not to self check for port first
+        
+        # get host/path
+        if ('http' in url):
+            split = url.split('//')[1].split('/')
+        else:
+            split = url.split('/')
+        host = split[0]
+        if ((len(split) == 1) or (split[1] == '')):
+            path = '/'
+        else:
+            path = split[1] 
+        
+        # get port      
         split = url.split(":")
         prefix = split[0]
         if (prefix == "https"):
@@ -47,13 +61,17 @@ class HTTPClient(object):
         elif (prefix == "ftp"):
             port = 21
         else:
-            num = split[2].split('/')
             try:
+                num = split[2].split('/')
                 port = int(num)
             except:
-                raise("Couldn't find port number")
+                try:
+                    num = split[1].split('/')
+                    port = int(num)
+                except:
+                    raise("Couldn't find port number")
                 
-        return port
+        return host, port, path
 
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -61,19 +79,57 @@ class HTTPClient(object):
         return None
 
     def get_code(self, data):
-        return None
+        split = data.split(' ')
+        try:
+            code = int(split[1])
+        except:
+            raise("Code is not a number")
+        return code
 
     def get_headers(self, data):
-        return None
+        split = data.split("\r\n")
+        split.pop(0)
+        headers = {}
+        for item in split:
+            if (item):
+                info = item.split(':')
+                title = info[0]
+                value = info[1]
+                headers[title] = value
+            else:
+                break
+        return headers
 
     def get_body(self, data):
-        return None
+        split = data.split("\r\n")
+        split.pop(0)
+        index = 0
+        for item in split:
+            if (not item):
+                body = '\r\n'.join(split[index:])
+                break
+            index += 1
+                
+        return body
     
-    def create_post(self, url):
+    def create_post(self, hsot, path):
         pass
     
-    def create_get(self, url):
-        pass
+    def create_get(self, host, path, referrer=''):
+        
+        br = "\r\n"
+        message = "GET " + path + " HTTP/1.1" + br
+        message += "Host: " + host + br
+        message += "User-Agent: Mozilla" + br                           ######
+        message += "Accept: text/html,text/css,application/x-www-form-urlencoded,*/*" + br
+        message += "Accept-Language: en-US,en" + br
+        message += "DNT: 1" + br
+        message += "Connection: close" + br
+        if referrer:
+            message += "Referer: " + referrer + br
+        message += br
+            
+        return message
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -94,26 +150,33 @@ class HTTPClient(object):
         return buffer.decode('utf-8')
 
     def GET(self, url, args=None):
-        code = 500
-        body = ""
-        port = self.get_host_port(url)
-        message = self.create_get(url)
-        self.connect(url, port)
-        self.sendall(message)
-        data = self.recvall(self.socket)
-        code = self.get_code(data)
-        headers = self.get_headers(data)
+        code = 300
+        headers = {}
+        old_url = ''
+        headers['Location'] = url
+        while ((code >= 300) and (code < 400)):
+            # follow redirect
+            new_url = headers['Location']
+            host, port, path = self.get_host_port(new_url)
+            message = self.create_get(host, path, old_url)
+            self.connect(host, port)
+            self.sendall(message)
+            data = self.recvall(self.socket)
+            self.close()
+            code = self.get_code(data)
+            headers = self.get_headers(data)
+            old_url = new_url
+            
         body = self.get_body(data)
-        self.close()
         print(body)
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
         code = 500
         body = ""
-        port = self.get_host_port(url)
-        message = self.create_post(url)
-        self.connect(url, port)
+        host, port, path = self.get_host_port(url)
+        message = self.create_post(host ,path)
+        self.connect(host, port)
         self.sendall(message)
         data = self.recvall(self.socket)
         code = self.get_code(data)
