@@ -19,7 +19,7 @@
 # The point is to understand what you have to send and get experience with it
 
 # Sources:
-# for help with hhtps
+# Stack Overflow - Python socket server handle HTTPS request
 # https://stackoverflow.com/questions/32062925/python-socket-server-handle-https-request
 # Alex - https://stackoverflow.com/users/3771035/alex
 # Ion  - https://stackoverflow.com/users/7601794/ion
