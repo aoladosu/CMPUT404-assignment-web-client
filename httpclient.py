@@ -22,7 +22,7 @@ import sys
 import socket
 import re
 # you may use urllib to encode data appropriately
-import urllib.parse
+from urllib.parse import urlparse, urlencode
 
 def help():
     print("httpclient.py [GET/POST] [URL]\n")
@@ -40,36 +40,25 @@ class HTTPClient(object):
     def get_host_port(self,url):
         # not to self check for port first
         
-        # get host/path
-        if ('http' in url):
-            split = url.split('//')[1].split('/')
-        else:
-            split = url.split('/')
-        host = split[0]
-        if ((len(split) == 1) or (split[1] == '')):
-            path = '/'
-        else:
-            path = split[1] 
-        
-        # get port      
-        split = url.split(":")
-        prefix = split[0]
-        if (prefix == "https"):
+        # get port
+        parsed = urlparse(url)
+        scheme = parsed.scheme
+        if (parsed.port):
+                port = parsed.port
+        elif (scheme == "https"):
             port = 443
-        elif (prefix == "https"):
+        elif (scheme == "http"):
             port = 80
-        elif (prefix == "ftp"):
+        elif (scheme == "ftp"):
             port = 21
         else:
-            try:
-                num = split[2].split('/')
-                port = int(num)
-            except:
-                try:
-                    num = split[1].split('/')
-                    port = int(num)
-                except:
-                    raise("Couldn't find port number")
+            raise Exception("Couldn't find port number")
+        
+        # get path
+        path = parsed.path if (parsed.path) else '/'
+
+        # get host -----
+        host = parsed.hostname
                 
         return host, port, path
 
@@ -83,7 +72,7 @@ class HTTPClient(object):
         try:
             code = int(split[1])
         except:
-            raise("Code is not a number")
+            raise Exception("Code is not a number")
         return code
 
     def get_headers(self, data):
@@ -94,8 +83,11 @@ class HTTPClient(object):
             if (item):
                 info = item.split(':')
                 title = info[0]
-                value = info[1]
+                value = info[1].strip()
                 headers[title] = value
+                if ("Location" in info[0]):
+                    info.pop(0)
+                    headers[title] = ":".join(info).strip()
             else:
                 break
         return headers
@@ -112,8 +104,26 @@ class HTTPClient(object):
                 
         return body
     
-    def create_post(self, hsot, path):
-        pass
+    def create_post(self, host, path, data):
+        
+        try:
+            encode = urlencode(data)
+            length = str(len(encode))
+        except:
+            encode = ''
+            length = '0'
+        
+        br = "\r\n"
+        message = "POST " + path + " HTTP/1.1" + br
+        message += "Host: " + host + br
+        message += "User-Agent: Mozilla" + br
+        message += "Content-Type: application/x-www-form-urlencoded" + br   
+        message += "Content-Length: " + length + br
+        message += br
+        message += encode + br
+        
+        #print(message)
+        return message
     
     def create_get(self, host, path, referrer=''):
         
@@ -129,6 +139,7 @@ class HTTPClient(object):
             message += "Referer: " + referrer + br
         message += br
             
+        #print(message)
         return message
     
     def sendall(self, data):
@@ -175,18 +186,18 @@ class HTTPClient(object):
         code = 500
         body = ""
         host, port, path = self.get_host_port(url)
-        message = self.create_post(host ,path)
+        message = self.create_post(host, path, args)
         self.connect(host, port)
         self.sendall(message)
         data = self.recvall(self.socket)
+        self.close()
         code = self.get_code(data)
         headers = self.get_headers(data)
         body = self.get_body(data)
-        self.close()
         print(body)
         return HTTPResponse(code, body)
 
-    def command(self, url, command="GET", args=None):
+    def command(self, url, command="POST", args=None):
         if (command == "POST"):
             return self.POST( url, args )
         else:
@@ -195,6 +206,8 @@ class HTTPClient(object):
 if __name__ == "__main__":
     client = HTTPClient()
     command = "GET"
+    #args = {'a':'aaaaaaaaaaaaa','b':'bbbbbbbbbbbbbbbbbbbbbb','c':'c','d':'012345\r67890\n2321321\n\r'}
+    #client.command('localhost:8080', "POST", args )
     if (len(sys.argv) <= 1):
         help()
         sys.exit(1)
