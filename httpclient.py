@@ -18,8 +18,15 @@
 # Write your own HTTP GET and POST
 # The point is to understand what you have to send and get experience with it
 
+# Sources:
+# for help with hhtps
+# https://stackoverflow.com/questions/32062925/python-socket-server-handle-https-request
+# Alex - https://stackoverflow.com/users/3771035/alex
+# Ion  - https://stackoverflow.com/users/7601794/ion
+
+
 import sys
-import socket
+import socket, ssl
 import re
 # you may use urllib to encode data appropriately
 from urllib.parse import urlparse, urlencode
@@ -33,9 +40,6 @@ class HTTPResponse(object):
         self.body = body
 
 class HTTPClient(object):
-    
-    def __init__(self):
-        self.headers = [""]
     
     def get_host_port(self,url):
         # not to self check for port first
@@ -56,14 +60,19 @@ class HTTPClient(object):
         
         # get path
         path = parsed.path if (parsed.path) else '/'
+        if ((path[-1] == '/') and (len(path) != 1)):
+            path = path[:-1]
 
-        # get host -----
+        # get host
         host = parsed.hostname
-                
+
         return host, port, path
 
-    def connect(self, host, port):
+    def connect(self, host, port, https=False):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if (https):
+            context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+            self.socket = context.wrap_socket(self.socket, server_hostname=host)
         self.socket.connect((host, port))
         return None
 
@@ -116,13 +125,13 @@ class HTTPClient(object):
         br = "\r\n"
         message = "POST " + path + " HTTP/1.1" + br
         message += "Host: " + host + br
-        message += "User-Agent: Mozilla" + br
+        message += "User-Agent: Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0" + br
         message += "Content-Type: application/x-www-form-urlencoded" + br   
         message += "Content-Length: " + length + br
+        message += "Connection: close" + br
         message += br
         message += encode + br
         
-        #print(message)
         return message
     
     def create_get(self, host, path, referrer=''):
@@ -130,16 +139,15 @@ class HTTPClient(object):
         br = "\r\n"
         message = "GET " + path + " HTTP/1.1" + br
         message += "Host: " + host + br
-        message += "User-Agent: Mozilla" + br                           ######
-        message += "Accept: text/html,text/css,application/x-www-form-urlencoded,*/*" + br
-        message += "Accept-Language: en-US,en" + br
+        message += "User-Agent: Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0" + br                           ######
+        message += "Accept: text/html,text/css,application/x-www-form-urlencoded,*/*;q=0.8" + br
+        message += "Accept-Language: en-US,en;q=0.5" + br
         message += "DNT: 1" + br
         message += "Connection: close" + br
         if referrer:
             message += "Referer: " + referrer + br
         message += br
-            
-        #print(message)
+        
         return message
     
     def sendall(self, data):
@@ -170,12 +178,13 @@ class HTTPClient(object):
             new_url = headers['Location']
             host, port, path = self.get_host_port(new_url)
             message = self.create_get(host, path, old_url)
-            self.connect(host, port)
+            self.connect(host, port, port==443)
             self.sendall(message)
             data = self.recvall(self.socket)
             self.close()
             code = self.get_code(data)
             headers = self.get_headers(data)
+            #print(headers)
             old_url = new_url
             
         body = self.get_body(data)
@@ -187,13 +196,14 @@ class HTTPClient(object):
         body = ""
         host, port, path = self.get_host_port(url)
         message = self.create_post(host, path, args)
-        self.connect(host, port)
+        self.connect(host, port, port==443)
         self.sendall(message)
         data = self.recvall(self.socket)
         self.close()
         code = self.get_code(data)
         headers = self.get_headers(data)
         body = self.get_body(data)
+        
         print(body)
         return HTTPResponse(code, body)
 
@@ -206,8 +216,6 @@ class HTTPClient(object):
 if __name__ == "__main__":
     client = HTTPClient()
     command = "GET"
-    #args = {'a':'aaaaaaaaaaaaa','b':'bbbbbbbbbbbbbbbbbbbbbb','c':'c','d':'012345\r67890\n2321321\n\r'}
-    #client.command('localhost:8080', "POST", args )
     if (len(sys.argv) <= 1):
         help()
         sys.exit(1)
