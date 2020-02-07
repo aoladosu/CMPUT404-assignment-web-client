@@ -113,7 +113,7 @@ class HTTPClient(object):
                 
         return body
     
-    def create_post(self, host, path, data):
+    def create_post(self, host, path, data, referrer=''):
         
         try:
             encode = urlencode(data)
@@ -129,6 +129,8 @@ class HTTPClient(object):
         message += "Content-Type: application/x-www-form-urlencoded" + br   
         message += "Content-Length: " + length + br
         message += "Connection: close" + br
+        if referrer:
+            message += "Referer: " + referrer + br
         message += br
         message += encode + br
         
@@ -192,18 +194,25 @@ class HTTPClient(object):
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
-        host, port, path = self.get_host_port(url)
-        message = self.create_post(host, path, args)
-        self.connect(host, port, port==443)
-        self.sendall(message)
-        data = self.recvall(self.socket)
-        self.close()
-        code = self.get_code(data)
-        headers = self.get_headers(data)
-        body = self.get_body(data)
+        code = 300
+        headers = {}
+        old_url = ''
+        headers['Location'] = url
+        while ((code >= 300) and (code < 400)):
+            # follow redirect
+            new_url = headers['Location']
+            host, port, path = self.get_host_port(new_url)
+            message = self.create_post(host, path, args, old_url)
+            self.connect(host, port, port==443)
+            self.sendall(message)
+            data = self.recvall(self.socket)
+            self.close()
+            code = self.get_code(data)
+            headers = self.get_headers(data)
+            #print(headers)
+            old_url = new_url
         
+        body = self.get_body(data)
         print(body)
         return HTTPResponse(code, body)
 
